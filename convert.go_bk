@@ -13,6 +13,8 @@ import (
 
 func main() {
 	inputdir := "./images/"
+	resizefolder := "./resize/"
+	eddgefolder := "./edge/"
 	out := "./outdata/"
 
 	imgSize := 256
@@ -27,28 +29,34 @@ func main() {
 	}
 
 	// エッジ抽出の閾値
-	edge_thresh := 40
+	edge_thresh := 100
 	for _, file := range files {
 
 		filename := inputdir + file.Name()
 		// 画像のリサイズ
 		resizeMat := gocv.IMRead(filename, gocv.IMReadAnyColor)
 		gocv.Resize(resizeMat, &resizeMat, image.Point{imgSize, imgSize}, 0, 0, gocv.InterpolationDefault)
+		gocv.IMWrite(resizefolder+file.Name(), resizeMat)
+		resizeReader, _ := os.Open(resizefolder + file.Name())
+
 		// グレースケールさせてからエッジ抽出
 		gray := gocv.NewMat()
 		gocv.CvtColor(resizeMat, &gray, gocv.ColorBGRToGray)
 		edge := gocv.NewMat()
 		gocv.Canny(gray, &edge, float32(edge_thresh), float32(edge_thresh*3))
+		gocv.BitwiseNot(edge, &edge) // 白黒反転させる
+		gocv.IMWrite(eddgefolder+file.Name(), edge)
+		edgeReader, _ := os.Open(eddgefolder + file.Name())
 
-		// 画像の結合　左：リサイズ　右：エッジ抽出
+		// 画像の結合　左：リサイズ 右：エッジ抽出
 		outImg := image.NewRGBA(image.Rect(0, 0, outImgWidth, outImgHeight))
-		resizeImg, _ := resizeMat.ToImage()
-		rectLeft := image.Rect(0, 0, imgSize, imgSize)
-		draw.Draw(outImg, rectLeft, resizeImg, image.Point{0, 0}, draw.Over)
+		resizeSrc, _, _ := image.Decode(resizeReader)
+		rect1 := image.Rect(0, 0, imgSize, imgSize)
+		draw.Draw(outImg, rect1, resizeSrc, image.Point{0, 0}, draw.Over)
 
-		edgeImg, _ := edge.ToImage()
-		rectRight := image.Rect(imgSize, 0, imgSize+imgSize, imgSize)
-		draw.Draw(outImg, rectRight, edgeImg, image.Point{0, 0}, draw.Over)
+		edgeSrc, _, _ := image.Decode(edgeReader)
+		rect2 := image.Rect(imgSize, 0, imgSize+imgSize, imgSize)
+		draw.Draw(outImg, rect2, edgeSrc, image.Point{0, 0}, draw.Over)
 
 		// 画像の保存
 		outname, _ := os.Create(out + file.Name())
